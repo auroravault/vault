@@ -4,6 +4,11 @@ Encrypted object storage with signed receipts and an append-only continuity ledg
 
 ---
 
+AuroraVault is currently in pre-1.0 development. Core cryptographic and data
+formats are stable, but operational and CLI behavior may still evolve.
+
+---
+
 You hope nobody asks *how you know* they haven't been touched.
 
 Config exports, build artifacts, vendor API responses, the output of a script you ran once and might need to defend later. They live in folders with timestamps in the filename. The timestamp is the upload time. Nothing proves the content.
@@ -48,7 +53,7 @@ No browser drive. No sync client. No shared folders. No analysis of your data. N
 $ vault setup
 $ vault put myfile.txt
 $ vault witness pubkey
-$ vault verify <home>/receipts/<object_id>.witness.json --pubkey <home>/server.pub
+$ vault verify <active_home>/receipts/<object_id>.witness.json --pubkey <active_home>/server.pub
 ```
 
 ---

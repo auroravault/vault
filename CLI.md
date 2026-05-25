@@ -2,7 +2,10 @@
 
 All commands, global flags, exit codes, and pipeline patterns.
 
-Version: client 1.13.5 / API v1. Global flags must appear before the command name.
+Version: client 0.16.10 / API v1. Global flags must appear before the command name.
+
+AuroraVault is currently in pre-1.0 development. API v1, receipt format v1, and
+Continuity ledger v1 are stable; CLI and operational behavior may still evolve.
 
 ---
 
@@ -10,8 +13,8 @@ Version: client 1.13.5 / API v1. Global flags must appear before the command nam
 
 | Flag | Description |
 |------|-------------|
-| `--machine` | Stable `key=value` output. Implies quiet. |
-| `--quiet` | Suppress human text. |
+| `--machine` | Stable `key=value` output for supported commands. Implies quiet. Unsupported commands fail explicitly with `unsupported_machine_mode`. |
+| `--quiet` | Suppress human text. Also forbids interactive prompts. |
 | `--no-color` | Disable ANSI colors. |
 | `--debug` | Print tracebacks and HTTP bodies on error. |
 | `--home <name>` | Use a named home for this invocation only. |
@@ -33,11 +36,13 @@ Version: client 1.13.5 / API v1. Global flags must appear before the command nam
 | `vault verify` | Verify a receipt or file. |
 | `vault delete` | Delete an object. |
 | `vault status` | Check connectivity, auth, keys, and version state. |
-| `vault update` | Show current client version. |
+| `vault update` | Show current client version and the unavailable self-update placeholder. |
 | `vault config` | Read and write global configuration. |
-| `vault account` | Show account status, redeem a Trial invite, or claim a paid account. |
+| `vault auth` | Account onboarding, status, and token management. |
+| `vault account` | _(Disabled — use `vault auth`)_ |
 | `vault witness retry` | Retry a missing receipt request. |
 | `vault witness pubkey` | Fetch the server witness public key. |
+| `vault uninstall` | Remove local Vault state; optionally purge server objects or revoke token. |
 | `vault ledger` | Show ledger entries. |
 | `vault sync` | Check server-side existence for local records. |
 | `vault export` | Decrypt and export all objects. |
@@ -58,7 +63,7 @@ Version: client 1.13.5 / API v1. Global flags must appear before the command nam
 | `5` | Local I/O failure |
 | `6` | Stream lock conflict — another vault stream is already running for this stream |
 | `7` | Stream not running — `vault stream stop` / `vault stream status` only |
-| `8` | Stream child process failed — `vault stream --process` only |
+| `8` | Stream child process failed — `vault stream start --process/--stdout/--stderr` only |
 | `10` | Stored, but receipt request failed — run `vault witness retry` |
 
 ---
@@ -71,8 +76,9 @@ vault init --home staging --path /srv/vault-staging --activate
 vault home list
 vault config set api_url https://vault.auroranode.com
 vault --machine --quiet status
-vault account --status
-vault account claim --code clm_your_claim_code
+vault auth status
+vault auth create --trial
+vault auth create --code clm_your_claim_code
 vault put contract.pdf
 tar czf - evidence/ | vault put --stdin --name "quarterly-evidence-2026-q1.tar.gz"
 cat dump.sql | vault put --stdin --name "db-dump-2026-05-02"
@@ -129,17 +135,43 @@ vault config set api_url <url>               # set server URL
 vault config set-token --token vlt_…        # store bearer token (hidden)
 ```
 
+`vault config set-token` may prompt only in human interactive mode. Under
+`--machine` or `--quiet`, `--token` is required.
+
 ---
 
-## vault account
+## vault auth
 
-Account status and onboarding.
+Account onboarding, status, and token management.
 
 ```sh
-vault account --status                         # plan, quota, and monthly usage
-vault account create --invite ivt_your_code    # Trial invite
-vault account claim --code clm_your_code       # paid account claim
+vault auth create --trial --invite ivt_…       # Trial account via invite code
+vault auth create --trial                      # Trial account via invite code (prompted)
+vault auth create --code clm_…                 # Paid account via claim code
+vault auth create                              # Paid account via claim code (prompted)
+vault auth claim --code clm_…                  # low-level escape hatch (same as auth create --code)
+vault auth status                              # plan, quota, and monthly usage
+vault auth logout                              # remove locally saved token
 ```
+
+Invite and claim codes may be prompted in human interactive mode. Under
+`--machine` or `--quiet`, they must be supplied explicitly.
+Paid tier (Basic or High) is resolved server-side from the claim code; the CLI
+does not select it. The removed `--basic` and `--high` flags fail immediately
+with an explicit message pointing to `vault auth create --code clm_...`.
+
+---
+
+## vault account _(disabled)_
+
+`vault account` is disabled and hidden from root help. Use `vault auth` instead.
+Old scripts fail with exit code 2 and a replacement hint.
+
+| Old | Preferred |
+|-----|-----------|
+| `vault account create --invite ivt_…` | `vault auth create --trial --invite ivt_…` |
+| `vault account claim --code clm_…` | `vault auth create --code clm_…` |
+| `vault account --status` | `vault auth status` |
 
 ---
 
@@ -177,7 +209,13 @@ vault get 1                                       # by short index — exits 2 w
 vault get <object_id> --out /tmp/file             # explicit output path
 vault get <object_id> --out /tmp/file --force     # overwrite existing file
 vault get <object_id> --stdout                    # stream to stdout (diagnostics → stderr)
+vault get stream s001 --idx 000003 --out file     # restore a stream event
+vault get stream s001 --event <event_id> --stdout # stream event by event ID
 ```
+
+Ordinary object restore rejects stream-only flags: `--idx`, `--event`,
+`--extract`, `--all`, and `--concat`. Stream restore rejects `--idx` with
+`--event`, and rejects `--all` with `--concat`.
 
 ---
 
@@ -187,10 +225,13 @@ List stored objects.
 
 ```sh
 vault list               # active objects
+vault list --objects     # explicit object-only view
 vault list --all         # all lifecycle states + STATUS column
-vault list --deleted     # deleted objects only
+vault list --deleted     # deleted objects + deleted stream events (for offline receipt audit)
 vault list --streams     # streams instead of objects
 ```
+
+`--objects`, `--streams`, `--all`, and `--deleted` are mutually exclusive.
 
 ---
 
@@ -252,6 +293,25 @@ vault witness pubkey --no-save    # print base64 instead
 vault witness retry <object_id>   # request missing receipt (after exit 10)
 ```
 
+By default the public key is saved to `<active_home>/server.pub`.
+
+---
+
+## vault uninstall
+
+Remove local Vault data. Optionally purge server-side objects and revoke the active bearer token before wiping local state.
+
+```sh
+vault uninstall                                              # exits 2 without --confirm
+vault uninstall --confirm                                    # wipe local state only
+vault uninstall --purge-server --confirm                     # delete all server objects first
+vault uninstall --revoke-token --confirm                     # revoke token, then wipe local state
+vault uninstall --purge-server --revoke-token --confirm      # full cleanup
+```
+
+`--purge-server` deletes each stored object from the server before wiping local state. Non-fatal server errors are printed as warnings.
+`--revoke-token` rotates the bearer token server-side (making the current token invalid), then removes the local token file. Exits 1 if revocation fails.
+
 ---
 
 ## vault ledger
@@ -278,7 +338,7 @@ vault sync --verbose  # include present objects
 
 ## vault export
 
-Decrypt and export all objects. Exports named local objects by default. Unnamed stdin objects are skipped unless exported through stream mode.
+Decrypt and export all objects. Exports named local objects by default. Unnamed stdin objects are skipped unless exported through stream mode. `--stream` decrypts and restores plaintext stream contents.
 
 ```sh
 vault export /tmp/export-dir              # exits 2 without --confirm
@@ -304,18 +364,29 @@ vault tree    # local state tree (no network)
 Continuous verifiable capture. Each event is a normal Vault object with its own Witness receipt, linked into a client-managed per-stream hash chain. The server does not understand streams.
 
 ```sh
-vault stream --target <file-or-dir> --name evidence  # snapshot now, then watch
-vault stream --target <file> --interval 600      # snapshot every 10 minutes
-vault stream --stdin                             # from stdin (line-buffered)
-vault stream --process -- <command>              # stdout+stderr from a process
-vault stream list
+vault stream start --target <file-or-dir> --name evidence  # snapshot now, then watch
+vault stream start --target <file> --interval 600      # snapshot every 10 minutes
+vault stream start --stdin                             # from stdin (line-buffered)
+vault stream start --process -- <command>              # stdout+stderr from a process
+vault stream list                                # active streams
+vault stream list --deleted                      # tombstoned streams only
+vault stream list --all                          # all streams
 vault stream status <stream_id>                  # exit 7 if stopped
 vault stream stop <stream_id>
-vault stream export <stream_id>                  # JSON to stdout
+vault stream delete <stream_id> --confirm        # delete server objects; marks deleted, ledger kept
+vault stream delete <stream_id> --confirm --purge-receipts  # also remove local receipts
+vault stream chain <stream_id>                  # proof / continuity / metadata JSON only
 vault stream report <stream_id>                  # human summary + chain check
 vault get stream <stream_id>                     # restore latest snapshot
 vault get stream <stream_id> --idx 000003        # restore specific event
 ```
+
+`vault stream start` is the canonical start command. The older
+`vault stream --target ...`, `vault stream --stdin`, and
+`vault stream --process ...` forms remain as hidden compatibility aliases.
+`vault stream chain` does not export plaintext stream contents; use
+`vault export --stream <id> --confirm` or `vault get stream <id>` for
+plaintext restore.
 
 ---
 

@@ -10,9 +10,13 @@ The service keeps the operational model narrow: encrypted objects, signed receip
 
 | | |
 |--|--|
-| Client | `1.13.5` |
+| Server | `0.8.3` |
+| Client | `0.16.10` |
 | API | `v1` |
-| Access | Trial by invite; Basic and High through checkout and account claim. |
+| Access | Trial by invite; Basic and High through checkout claim-code redemption. |
+
+AuroraVault runtime and CLI versions are intentionally pre-1.0. API v1,
+receipt format v1, and Continuity ledger v1 remain independently stable.
 
 ---
 
@@ -31,7 +35,7 @@ The service keeps the operational model narrow: encrypted objects, signed receip
 
 - Receipt v1 is compatibility-bound.
 - Continuity ledger v1 is compatibility-bound.
-- Stream ledger schema v2 is local client-side state and has not yet been frozen — it may change between versions.
+- Product runtime / CLI uses `0.x.y` and may still evolve before 1.0.0.
 - Machine-readable CLI errors are stable and additive.
 
 ---

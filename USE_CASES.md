@@ -64,8 +64,8 @@ Before: a log file is rotated nightly. A config directory is git-committed whene
 After: vault stream snapshots the target on an interval. Each snapshot is a full vault put — encrypted, receipted, ledger-anchored. The stream builds a per-stream hash chain across all snapshots. Any specific version is retrievable by index.
 
 ```sh
-vault stream --target ~/audit.log --interval 300          # snapshot every 5 min
-vault stream --target ./project --interval 3600 --background   # hourly dir snapshot
+vault stream start --target ~/audit.log --interval 300          # snapshot every 5 min
+vault stream start --target ./project --interval 3600 --background   # hourly dir snapshot
 vault stream report <stream_id>    # integrity summary
 vault get stream <stream_id>       # restore latest snapshot
 ```
@@ -102,7 +102,7 @@ vault receipt <object_id>   # show timestamped receipt for reviewers
 
 Before: CI stores artifacts to S3 with no receipt. Cron jobs run and produce output that disappears into logs. Proving what ran, when, and with what result means parsing log files and hoping the timestamps are trustworthy.
 
-After: vault's machine mode emits stable `key=value` output on stdout. Scripts capture the object ID and receipt path. Standard UNIX tools compose with it directly. Scripts should ignore unknown future keys — the output contract is stable and additive.
+After: vault's machine mode emits stable `key=value` output on stdout for supported commands. Scripts capture the object ID and receipt path. Standard UNIX tools compose with it directly. Scripts should ignore unknown future keys — the output contract is stable and additive. `--machine` and `--quiet` never prompt; missing required input fails immediately.
 
 ```sh
 # Capture and verify in CI
@@ -110,7 +110,7 @@ OID=$(vault --machine --quiet put build.tar.gz | grep ^object_id= | cut -d= -f2)
 vault --machine verify <home>/receipts/${OID}.witness.json | grep -q "verified=true"
 
 # Cron: daily snapshot with ledger check
-vault stream --target ./data --interval 86400 --name daily-data
+vault stream start --target ./data --interval 86400 --name daily-data
 vault stream report s001
 ```
 

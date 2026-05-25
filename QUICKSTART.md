@@ -6,24 +6,54 @@ Install, configure, store a file, get a signed receipt, and verify what the rece
 
 ## Prerequisites
 
-- Linux or macOS
+| Platform | Status |
+|----------|--------|
+| Linux x86_64 | Supported (binary installer) |
+| Linux arm64 | Binary in progress — not yet available |
+| macOS arm64 | Binary in progress — not yet available |
+| macOS x86_64 | Binary in progress — not yet available |
+| Windows | Not supported |
+
 - A server URL
-- A Trial invite code or paid account claim code
+- A claim code or token
 
 ---
 
 ## Step 1 — Install
 
-Install with pipx (recommended) or pip, then confirm the CLI is available.
+**Binary installer (Linux x86_64, no Python required):**
 
 ```sh
-pipx install auroravault
-vault update
+curl -fsSL https://vault.auroranode.com/vault/install.sh | sh
 ```
+
+The installer places `auroravault` in `~/.local/bin/`. If no existing `vault`
+command is present, a `vault → auroravault` compatibility symlink is also created.
+If `vault` already exists it is not touched — use `auroravault` directly.
+
+To update:
+
+```sh
+auroravault update
+```
+
+pip and pipx packages are not published. Binaries for other platforms are in progress.
 
 ---
 
-## Step 2 — Set up
+## Step 2 — Claim your account
+
+If you have a claim code, exchange it now to create your account and receive a token:
+
+```sh
+vault auth create --code clm_your_code_here
+```
+
+If you already have a token, skip to Step 3.
+
+---
+
+## Step 3 — Set up
 
 Interactive wizard — generates your local Ed25519 keypair, sets the server URL, and stores your bearer token.
 
@@ -39,9 +69,12 @@ vault config set api_url https://vault.auroranode.com
 vault config set-token --token vlt_your_token_here
 ```
 
+For automation, pass all required values explicitly. `--machine` and `--quiet`
+never prompt; missing token, invite, or claim-code input exits non-zero.
+
 ---
 
-## Step 3 — Check connectivity
+## Step 4 — Check connectivity
 
 ```sh
 $ vault status
@@ -49,7 +82,7 @@ $ vault status
   server       ● reachable
   auth         ● valid
   keys         ● present
-  version      client 1.13.5
+  version      client 0.16.10
   home         default  ~/.local/share/auroravault/homes/default
 ```
 
@@ -57,7 +90,7 @@ If auth shows invalid, re-run `vault config set-token`.
 
 ---
 
-## Step 4 — Store a file
+## Step 5 — Store a file
 
 ```sh
 $ vault put myfile.txt
@@ -75,7 +108,7 @@ You now have three things: an encrypted object on the server addressed by its SH
 
 ---
 
-## Step 5 — List what you have
+## Step 6 — List what you have
 
 ```sh
 vault list
@@ -83,7 +116,7 @@ vault list
 
 ---
 
-## Step 6 — Retrieve and decrypt
+## Step 7 — Retrieve and decrypt
 
 ```sh
 vault get <object_id> --out recovered.txt
@@ -97,13 +130,13 @@ vault get 1 --out recovered.txt
 
 ---
 
-## Step 7 — Verify a receipt
+## Step 8 — Verify a receipt
 
 Cache the server public key once, then verify the receipt signature offline:
 
 ```sh
 $ vault witness pubkey
-$ vault verify <receipt.witness.json> --pubkey ~/path_to_active_home/server.pub
+$ vault verify <receipt.witness.json> --pubkey <active_home>/server.pub
 
   signature  ✓
 ```

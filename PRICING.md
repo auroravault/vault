@@ -59,4 +59,4 @@ Trial is invite-based and limited to 50 active Trial accounts. Paid accounts are
 
 No open-ended storage, open-ended bandwidth, priority support, managed key recovery, or custody of plaintext, filenames, or encryption keys.
 
-After payment, a claim-code email tells you how to run `vault account claim --code <code>`. Basic and High expiry includes a 30-day read-only grace window for object GET, object HEAD, continuity export, and account status.
+After payment, a claim-code email tells you how to run `vault auth create --code <code>`. Basic and High expiry includes a 30-day read-only grace window for object GET, object HEAD, continuity export, and account status.
